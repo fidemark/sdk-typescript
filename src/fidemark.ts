@@ -170,6 +170,12 @@ interface AttestResult {
   verifyUrl: string;
 }
 
+export type InspectResult =
+  | { ok: true; attestation: FidemarkAttestation }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "foreign_schema"; message: string }
+  | { ok: false; reason: "rpc_error"; message: string };
+
 export interface BatchHumanItem extends AttestHumanInput {
   type: "human";
 }
@@ -363,6 +369,33 @@ export class Fidemark {
   }
 
   /**
+   * Probe a UID without throwing. Useful for `refUID` validators that need to
+   * tell apart "is a Fidemark attestation" from "exists but uses a foreign
+   * schema" from "doesn't exist" without wrapping every call in try/catch.
+   *
+   * Returns one of:
+   *   - { ok: true, attestation }            ->  Fidemark, decoded
+   *   - { ok: false, reason: "not_found" }   ->  EAS returned an empty record
+   *   - { ok: false, reason: "foreign_schema", schemaUID }
+   *                                          ->  exists but not a Fidemark schema
+   *   - { ok: false, reason: "rpc_error", message }  ->  RPC failed
+   */
+  async inspect(uid: string): Promise<InspectResult> {
+    try {
+      const attestation = await this.verify(uid);
+      return { ok: true, attestation };
+    } catch (err) {
+      if (err instanceof FidemarkError) {
+        if (err.code === "ATTESTATION_NOT_FOUND") return { ok: false, reason: "not_found" };
+        if (err.code === "UNKNOWN_SCHEMA") {
+          return { ok: false, reason: "foreign_schema", message: err.message };
+        }
+      }
+      return { ok: false, reason: "rpc_error", message: (err as Error).message };
+    }
+  }
+
+  /**
    * Find every Fidemark attestation that references the given contentHash.
    *
    * Implementation note: scans `HumanAttestation` and `AIAttestation` events
@@ -455,11 +488,14 @@ export class Fidemark {
       try {
         att = await this.verify(cursor);
       } catch (err) {
-        if (err instanceof FidemarkError && err.code === "VALIDATION_REJECTED") {
-          // Parent isn't a Fidemark schema, stop here, return what we have.
-          break;
-        }
-        if (err instanceof FidemarkError && err.code === "ATTESTATION_NOT_FOUND") {
+        if (
+          err instanceof FidemarkError &&
+          (err.code === "UNKNOWN_SCHEMA" ||
+            err.code === "VALIDATION_REJECTED" ||
+            err.code === "ATTESTATION_NOT_FOUND")
+        ) {
+          // Parent isn't a Fidemark schema (or the bootstrap rotated UIDs);
+          // stop here and return whatever we've gathered.
           break;
         }
         throw err;
@@ -784,19 +820,37 @@ export class Fidemark {
   }
 
   private decodeAttestation(raw: EASAttestation): FidemarkAttestation {
+    const known = this.network.schemas;
     const type: FidemarkSchemaType =
-      raw.schema === this.network.schemas.human
+      raw.schema === known.human
         ? "human"
-        : raw.schema === this.network.schemas.ai
+        : raw.schema === known.ai
           ? "ai"
-          : raw.schema === this.network.schemas.multi
+          : raw.schema === known.multi
             ? "multi"
-            : raw.schema === this.network.schemas.pop
+            : raw.schema === known.pop
               ? "pop"
               : (() => {
+                  // Either the attestation is from a different EAS app, or it
+                  // was issued against a previous bootstrap of this devnet
+                  // (each redeploy gives schemas fresh UIDs). Surface enough
+                  // detail that the caller can act.
+                  const expected = [
+                    `human=${known.human}`,
+                    `ai=${known.ai}`,
+                    known.multi ? `multi=${known.multi}` : null,
+                    known.pop ? `pop=${known.pop}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", ");
                   throw new FidemarkError(
-                    "VALIDATION_REJECTED",
-                    `Attestation ${raw.uid} uses an unrecognized schema for this network.`,
+                    "UNKNOWN_SCHEMA",
+                    `Attestation ${raw.uid} references schema ${raw.schema}, ` +
+                      `which is not registered on network "${this.network.name}". ` +
+                      `Expected one of [${expected}]. ` +
+                      `Common cause: the local devnet was rebootstrapped after this attestation was issued. ` +
+                      `Restart the consuming process so it reloads sources/contracts/deployments/${this.network.name}.json, ` +
+                      `or look this UID up via EASScan directly.`,
                   );
                 })();
 

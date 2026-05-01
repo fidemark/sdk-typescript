@@ -11,6 +11,7 @@ export type {
   BatchHumanItem,
   BatchAIItem,
   BatchResult,
+  InspectResult,
 } from "./fidemark.js";
 export { hashContent, hashPrompt } from "./hashing.js";
 export { getNetwork, registerNetwork } from "./networks.js";

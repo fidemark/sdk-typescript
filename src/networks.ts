@@ -1,14 +1,21 @@
 /**
  * Known Fidemark networks.
  *
- * The registry holds RPC + EAS predeploy info for every supported chain. The
- * resolver address and schema UIDs come from per-network deployment artifacts
- * written by the contracts package's post-deploy script. Until an artifact is
- * loaded for a public network, that network is reported as "not yet deployed".
+ * The registry holds RPC + EAS predeploy info for every network the SDK
+ * knows about. Resolver addresses and schema UIDs come from per-network
+ * deployment artifacts bundled with the package (see `local.ts`).
  *
  * Loaders:
- *   - `loadLocalNetwork()`, reads `deployments/local.json` from the contracts package.
- *   - `loadDeploymentArtifact(name)`, reads `deployments/<name>.json` (testnet/mainnet).
+ *   - `loadDeploymentArtifact(name)` reads the artifact for any deployed
+ *     network (`base-sepolia`, `base`, ...) and registers it.
+ *   - `loadLocalNetwork()` is monorepo-development-only; it loads
+ *     `sources/contracts/deployments/local.json` produced by
+ *     `npm run dev:chain`. Not advertised to end users.
+ *
+ * `getNetwork(name)` lazy-loads a public-network artifact on first call,
+ * so application code only has to write `getNetwork("base-sepolia")` and
+ * the resolver/schema UIDs are pulled from the bundled artifact behind
+ * the scenes.
  */
 
 export interface NetworkConfig {
@@ -49,9 +56,10 @@ export interface NetworkConfig {
 const OP_STACK_EAS = "0x4200000000000000000000000000000000000021";
 const OP_STACK_SCHEMA_REGISTRY = "0x4200000000000000000000000000000000000020";
 
-export type NetworkName = "local" | "base-sepolia" | "base";
+/** The set of public Fidemark networks consumers can target. */
+export type NetworkName = "base-sepolia" | "base";
 
-const REGISTRY: Partial<Record<NetworkName, NetworkConfig>> = {
+const REGISTRY: Record<string, NetworkConfig> = {
   "base-sepolia": {
     name: "base-sepolia",
     chainId: 84532,
@@ -82,11 +90,23 @@ export function getNetwork(name: NetworkName): NetworkConfig {
     throw new Error(`Unknown network: ${name}. Known: ${Object.keys(REGISTRY).join(", ")}`);
   }
   if (!cfg.contracts.resolver || !cfg.schemas.human || !cfg.schemas.ai) {
-    throw new Error(
-      `Network ${name} is not yet deployed. Contract addresses unset. ` +
-        `Run \`npm run deploy:${name === "base-sepolia" ? "sepolia" : name}\` in sources/contracts ` +
-        `or call \`loadDeploymentArtifact('${name}')\` if the artifact exists.`,
-    );
+    // Lazy-load the bundled artifact. Avoids forcing every consumer to call
+    // loadDeploymentArtifact() explicitly: getNetwork("base-sepolia") just
+    // works as long as the package was published with the artifact in place.
+    try {
+      // Local import avoids a top-level circular dependency between
+      // local.ts and networks.ts.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const local = require("./local.js") as typeof import("./local.js");
+      return local.loadDeploymentArtifact(name);
+    } catch (err) {
+      throw new Error(
+        `Network ${name} is not yet deployed in this build of the SDK. ` +
+          `Try upgrading to a newer version of @fidemark/sdk, or call ` +
+          `loadDeploymentArtifact("${name}", "/path/to/artifact.json") manually. ` +
+          `Underlying cause: ${(err as Error).message ?? String(err)}`,
+      );
+    }
   }
   return cfg;
 }
@@ -96,6 +116,6 @@ export function getNetwork(name: NetworkName): NetworkConfig {
  * `loadDeploymentArtifact` to inject deployed addresses, and by tests to wire
  * up an ad-hoc deployment.
  */
-export function registerNetwork(name: NetworkName, config: NetworkConfig): void {
+export function registerNetwork(name: string, config: NetworkConfig): void {
   REGISTRY[name] = config;
 }

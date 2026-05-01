@@ -3,7 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "description": "Fidemark Protocol, TypeScript SDK",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
+  "author": "Vincent Cibelli (VinciDev) <vincent@cibelli.fr>",
+  "homepage": "https://fidemark.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fidemark/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fidemark/sdk-typescript/issues"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -17,7 +26,10 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "deployments",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsup",

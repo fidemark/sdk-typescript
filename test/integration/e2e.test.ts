@@ -521,19 +521,50 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     ).rejects.toMatchObject({ code: "VALIDATION_REJECTED" });
   });
 
-  it("attestHumanWithPoP: rejects an unregistered (forged) proof", async () => {
+  it("attestHumanWithPoP: rejects a proof the verifier marks as invalid", async () => {
+    // The dev MockWorldID accepts any proof by default so the dashboard PoP
+    // flow is exercise-able without the real Orb. Per-tuple registrations
+    // override that default, so we explicitly mark this proof as failing and
+    // expect the resolver to surface VALIDATION_REJECTED.
+    const network = loadLocalNetwork();
+    if (!network.contracts.worldIdVerifier || !network.worldId) {
+      throw new Error("local network missing World ID config");
+    }
+
     const aliceWallet = await freshWallet();
     const alice = new Fidemark({ network: "local", signer: aliceWallet });
 
+    const content = `forged-pop ${Date.now()}-${Math.random()}`;
+    const contentHash = hashContent(content);
+    const root = BigInt(Math.floor(Math.random() * 1e15)) + 1n;
+    const nullifierHash = BigInt(Math.floor(Math.random() * 1e15)) + 1n;
+    const proof: [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint] = [
+      31n, 32n, 33n, 34n, 35n, 36n, 37n, 38n,
+    ];
+    const extNul = popExternalNullifier(network.worldId.appId, contentHash);
+    const signalHash = popSignalHash(contentHash, aliceWallet.address);
+
+    const mockAbi = [
+      "function registerProof(uint256 root,uint256 groupId,uint256 signalHash,uint256 nullifierHash,uint256 externalNullifier,uint256[8] proof,bool willSucceed) external",
+    ];
+    const mock = new Contract(network.contracts.worldIdVerifier, mockAbi, aliceWallet);
+    await (
+      await mock.registerProof(
+        root,
+        BigInt(network.worldId.groupId),
+        signalHash,
+        nullifierHash,
+        extNul,
+        proof,
+        false,
+      )
+    ).wait();
+
     await expect(
       alice.attestHumanWithPoP({
-        content: "forged-pop",
+        content,
         contentType: "text/plain",
-        worldIdProof: {
-          root: 1n,
-          nullifierHash: 2n,
-          proof: [3n, 4n, 5n, 6n, 7n, 8n, 9n, 10n],
-        },
+        worldIdProof: { root, nullifierHash, proof },
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_REJECTED" });
   });

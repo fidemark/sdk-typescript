@@ -58,7 +58,7 @@ describe("offchain attestations", () => {
   it("signs and verifies an AI Proof envelope", async () => {
     const envelope = await signAIOffchain(alice, network, {
       content: "AI output text.",
-      modelId: "claude-sonnet-4-20250514",
+      modelId: "claude-sonnet-4-6",
       provider: "anthropic",
       prompt: "say something",
     });
@@ -66,7 +66,7 @@ describe("offchain attestations", () => {
     expect(envelope.type).toBe("ai");
     if (envelope.type !== "ai") throw new Error("type narrow");
     expect(envelope.decoded).toMatchObject({
-      modelId: "claude-sonnet-4-20250514",
+      modelId: "claude-sonnet-4-6",
       provider: "anthropic",
     });
     expect(verifyOffchain(envelope, network)).toBe(true);

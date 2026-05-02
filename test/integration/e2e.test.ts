@@ -67,7 +67,7 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
 
     const result = await fidemark.attestAI({
       content: "The AI wrote: hello world.",
-      modelId: "claude-sonnet-4-20250514",
+      modelId: "claude-sonnet-4-6",
       provider: "anthropic",
       prompt: "say hello",
       parameters: { temperature: 0.7, maxTokens: 100 },
@@ -75,7 +75,7 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
 
     const att = await fidemark.verify(result.uid);
     expect(att.type).toBe("ai");
-    expect(att.ai?.modelId).toBe("claude-sonnet-4-20250514");
+    expect(att.ai?.modelId).toBe("claude-sonnet-4-6");
     expect(att.ai?.provider).toBe("anthropic");
     expect(att.ai?.parameters).toBe('{"temperature":0.7,"maxTokens":100}');
     expect(att.ai?.promptHash).toMatch(/^0x[0-9a-f]{64}$/);
@@ -142,7 +142,7 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     // Step 2: AI translates it, referencing the original.
     const translated = await alice.attestAI({
       content: "L'article original (traduit).",
-      modelId: "claude-sonnet-4-20250514",
+      modelId: "claude-sonnet-4-6",
       provider: "anthropic",
       prompt: "translate to french",
       refUID: original.uid,
@@ -195,7 +195,7 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     const human = await fidemark.attestHuman({ content, contentType: "text/article" });
     const ai = await fidemark.attestAI({
       content,
-      modelId: "claude-sonnet-4-20250514",
+      modelId: "claude-sonnet-4-6",
       provider: "anthropic",
     });
 
@@ -210,7 +210,7 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     const fidemark = new Fidemark({ network: "local", signer: await freshWallet() });
     const result = await fidemark.attestBatch([
       { type: "human", content: "batch human 1", contentType: "text/article" },
-      { type: "ai", content: "batch ai 1", modelId: "claude-sonnet-4-20250514", provider: "anthropic" },
+      { type: "ai", content: "batch ai 1", modelId: "claude-sonnet-4-6", provider: "anthropic" },
       { type: "human", content: "batch human 2", contentType: "text/article" },
     ]);
     expect(result.uids).toHaveLength(3);
@@ -383,7 +383,7 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     const envelope = await alice.attestAIOffchain(
       {
         content: "AI output to bring on-chain",
-        modelId: "claude-sonnet-4-20250514",
+        modelId: "claude-sonnet-4-6",
         provider: "anthropic",
         prompt: "produce something",
       },
@@ -396,7 +396,7 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     const att = await bob.verify(result.uid);
     expect(att.type).toBe("ai");
     expect(att.attester.toLowerCase()).toBe(aliceWallet.address.toLowerCase());
-    expect(att.ai?.modelId).toBe("claude-sonnet-4-20250514");
+    expect(att.ai?.modelId).toBe("claude-sonnet-4-6");
     expect(att.ai?.provider).toBe("anthropic");
   });
 

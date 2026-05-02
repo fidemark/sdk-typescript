@@ -4,7 +4,7 @@
   "private": true,
   "description": "Fidemark Protocol, TypeScript SDK",
   "license": "Apache-2.0",
-  "author": "Vincent Cibelli (VinciDev) <vincent@cibelli.fr>",
+  "author": "Vincent Cibelli (VinciDev) <contact@vincidev.com>",
   "homepage": "https://fidemark.dev",
   "repository": {
     "type": "git",

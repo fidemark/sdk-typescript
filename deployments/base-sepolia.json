@@ -1,0 +1,39 @@
+{
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "rpcUrl": "https://sepolia.base.org",
+  "deployedAt": "2026-05-02T12:29:09.316Z",
+  "deployer": "0xb71b02Da4954fCd00CD115c049033E2141fe426E",
+  "deployBlock": 40978289,
+  "contracts": {
+    "schemaRegistry": "0x4200000000000000000000000000000000000020",
+    "eas": "0x4200000000000000000000000000000000000021",
+    "resolver": "0xc17c1013479278d91065C40abDe9Ae86C3C5581d",
+    "multiResolver": "0xB3c0D0eb17BcEeF4AFc0fD3A7024B87509051431",
+    "popResolver": "0x25210Aa76A6e8EFeE070A2f849F652174d4Edd08",
+    "worldIdVerifier": "0x42FF98C4E85212a5D31358ACbFe76a621b50fC02"
+  },
+  "schemas": {
+    "human": {
+      "uid": "0x036295c587e1bf82ab6f6ed881d1b5b2bc38eb69023ea2ed213cdf1a0d726a43",
+      "definition": "bytes32 contentHash,string contentType,address creator,uint64 createdAt,string proofMethod"
+    },
+    "ai": {
+      "uid": "0xf137529321d45cf2b2dbac4eb0f9d1d0d8b61cd16bb4c4dc10047eff68cc0a4b",
+      "definition": "bytes32 contentHash,string modelId,bytes32 promptHash,string parameters,string provider"
+    },
+    "multi": {
+      "uid": "0x701078ea03836f41ce18d698cda3ea6857947a76ed19810b5611032bb5af6189",
+      "definition": "bytes32 contentHash,string contentType,address[] attesters,bytes[] signatures,uint64 createdAt,string proofMethod"
+    },
+    "pop": {
+      "uid": "0xad0644cdb97b0cd3731a21eef6e240429db367358b7498a770df02b3b9b6bc5f",
+      "definition": "bytes32 contentHash,string contentType,address creator,uint64 createdAt,uint256 root,uint256 nullifierHash,uint256[8] proof,string proofMethod"
+    }
+  },
+  "worldId": {
+    "appId": "app_7fc93f88958bc62a217e1df679659c1c",
+    "groupId": 1,
+    "isMock": false
+  }
+}

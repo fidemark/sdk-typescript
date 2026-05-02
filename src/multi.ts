@@ -26,6 +26,7 @@ const CLAIM_TYPES: Record<string, Array<{ name: string; type: string }>> = {
     { name: "contentHash", type: "bytes32" },
     { name: "contentType", type: "string" },
     { name: "createdAt", type: "uint64" },
+    { name: "attesters", type: "address[]" },
   ],
 };
 
@@ -38,6 +39,14 @@ export interface MultiPartyClaim {
   contentType: string;
   /** Unix seconds. Must match across all co-signers. */
   createdAt: number;
+  /**
+   * The full ordered set of co-signers. Each co-signer signs OVER this set, so
+   * a slip cannot be lifted into an attestation grouping the same content with
+   * a different attesters list. Coordinator + co-signers must agree on the set
+   * up front. Order matters: the on-chain `attesters[i]` must equal the
+   * recovered signer for slip i.
+   */
+  attesters: string[];
 }
 
 export interface MultiPartySlip {
@@ -98,18 +107,21 @@ export async function signMultiPartyClaim(
 
 /**
  * Helper: derive a normalized claim from raw content + a coordinator-chosen
- * timestamp. All co-signers must produce a slip from the SAME claim object,
- * use this to keep them in sync.
+ * timestamp + the full set of attesters. All co-signers must produce a slip
+ * from the SAME claim object (including the same attesters list, in the same
+ * order); use this to keep them in sync.
  */
 export function buildMultiPartyClaim(input: {
   content: string | Uint8Array;
   contentType: string;
+  attesters: string[];
   createdAt?: number;
 }): MultiPartyClaim {
   return {
     contentHash: hashContent(input.content),
     contentType: input.contentType,
     createdAt: input.createdAt ?? Math.floor(Date.now() / 1000),
+    attesters: input.attesters,
   };
 }
 

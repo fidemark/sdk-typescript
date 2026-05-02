@@ -259,6 +259,7 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     const claim = buildMultiPartyClaim({
       content: "Co-signed claim by alice, bob, carol.",
       contentType: "text/article",
+      attesters: [aliceSigner.address, bobSigner.address, carolSigner.address],
     });
 
     const slips = await Promise.all([
@@ -291,7 +292,11 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     const aliceSigner = await freshWallet();
     const bobSigner = await freshWallet();
 
-    const claim = buildMultiPartyClaim({ content: "forge attempt", contentType: "text/plain" });
+    const claim = buildMultiPartyClaim({
+      content: "forge attempt",
+      contentType: "text/plain",
+      attesters: [aliceSigner.address, bobSigner.address],
+    });
     const aliceSlip = await signMultiPartyClaim(aliceSigner, claim, network);
 
     // Lie: claim bob is the second co-signer but use alice's signature.
@@ -306,7 +311,11 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
   it("multi-party: SDK rejects fewer than 2 slips before any chain call", async () => {
     const network = loadLocalNetwork();
     const aliceSigner = await freshWallet();
-    const claim = buildMultiPartyClaim({ content: "solo attempt", contentType: "text/plain" });
+    const claim = buildMultiPartyClaim({
+      content: "solo attempt",
+      contentType: "text/plain",
+      attesters: [aliceSigner.address],
+    });
     const aliceSlip = await signMultiPartyClaim(aliceSigner, claim, network);
 
     const coordinator = new Fidemark({ network: "local", signer: await freshWallet() });
@@ -320,7 +329,11 @@ describeIntegration("Fidemark SDK ↔ local devnet", () => {
     const aliceSigner = await freshWallet();
     const bobSigner = await freshWallet();
 
-    const claim = buildMultiPartyClaim({ content: "stranger submits", contentType: "text/plain" });
+    const claim = buildMultiPartyClaim({
+      content: "stranger submits",
+      contentType: "text/plain",
+      attesters: [aliceSigner.address, bobSigner.address],
+    });
     const slips = await Promise.all([
       signMultiPartyClaim(aliceSigner, claim, network),
       signMultiPartyClaim(bobSigner, claim, network),

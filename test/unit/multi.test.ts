@@ -34,11 +34,19 @@ const networkWithoutMulti: NetworkConfig = {
 const KEY_A = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const KEY_B = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 
+const ALICE_ADDR = new Wallet(KEY_A).address;
+const BOB_ADDR = new Wallet(KEY_B).address;
+
 describe("buildMultiPartyClaim", () => {
   it("hashes content via SHA-256 and applies a default timestamp", () => {
-    const claim = buildMultiPartyClaim({ content: "shared text", contentType: "text/plain" });
+    const claim = buildMultiPartyClaim({
+      content: "shared text",
+      contentType: "text/plain",
+      attesters: [ALICE_ADDR, BOB_ADDR],
+    });
     expect(claim.contentHash).toBe(hashContent("shared text"));
     expect(claim.contentType).toBe("text/plain");
+    expect(claim.attesters).toEqual([ALICE_ADDR, BOB_ADDR]);
     expect(typeof claim.createdAt).toBe("number");
     expect(claim.createdAt).toBeGreaterThan(0);
   });
@@ -48,6 +56,7 @@ describe("buildMultiPartyClaim", () => {
       content: "x",
       contentType: "text/plain",
       createdAt: 1700000000,
+      attesters: [ALICE_ADDR, BOB_ADDR],
     });
     expect(claim.createdAt).toBe(1700000000);
   });
@@ -59,17 +68,19 @@ describe("multiPartyClaimDigest", () => {
       content: "deterministic",
       contentType: "text/plain",
       createdAt: 1700000000,
+      attesters: [ALICE_ADDR, BOB_ADDR],
     });
     const a = multiPartyClaimDigest(claim, network);
     const b = multiPartyClaimDigest(claim, network);
     expect(a).toBe(b);
   });
 
-  it("changes when content, contentType, createdAt, or network differ", () => {
+  it("changes when content, contentType, createdAt, attesters, or network differ", () => {
     const base = buildMultiPartyClaim({
       content: "base",
       contentType: "text/plain",
       createdAt: 1700000000,
+      attesters: [ALICE_ADDR, BOB_ADDR],
     });
     const baseDigest = multiPartyClaimDigest(base, network);
 
@@ -81,12 +92,29 @@ describe("multiPartyClaimDigest", () => {
     );
     expect(multiPartyClaimDigest({ ...base, createdAt: 1700000001 }, network)).not.toBe(baseDigest);
 
+    // Swapping the attesters list (different addresses) must change the digest:
+    // this is the binding that prevents a slip from being reused with a
+    // different co-signer set.
+    expect(
+      multiPartyClaimDigest({ ...base, attesters: [ALICE_ADDR] }, network),
+    ).not.toBe(baseDigest);
+    // Even reordering the same set must change the digest, EIP-712 array
+    // hashing is order-sensitive, and the resolver iterates by index.
+    expect(
+      multiPartyClaimDigest({ ...base, attesters: [BOB_ADDR, ALICE_ADDR] }, network),
+    ).not.toBe(baseDigest);
+
     const differentChain: NetworkConfig = { ...network, chainId: 8453 };
     expect(multiPartyClaimDigest(base, differentChain)).not.toBe(baseDigest);
   });
 
   it("throws when the network has no multiResolver address", () => {
-    const claim = buildMultiPartyClaim({ content: "x", contentType: "text/plain", createdAt: 1 });
+    const claim = buildMultiPartyClaim({
+      content: "x",
+      contentType: "text/plain",
+      createdAt: 1,
+      attesters: [ALICE_ADDR, BOB_ADDR],
+    });
     expect(() => multiPartyClaimDigest(claim, networkWithoutMulti)).toThrow(/multiResolver/);
   });
 });
@@ -98,6 +126,7 @@ describe("signMultiPartyClaim", () => {
       content: "co-authored",
       contentType: "text/article",
       createdAt: 1700000000,
+      attesters: [ALICE_ADDR, BOB_ADDR],
     });
 
     const slip = await signMultiPartyClaim(alice, claim, network);
@@ -127,6 +156,7 @@ describe("signMultiPartyClaim", () => {
       content: "co-authored",
       contentType: "text/article",
       createdAt: 1700000000,
+      attesters: [ALICE_ADDR, BOB_ADDR],
     });
 
     const slipA = await signMultiPartyClaim(alice, claim, network);
@@ -138,7 +168,12 @@ describe("signMultiPartyClaim", () => {
 
   it("throws when the network has no multiResolver address", async () => {
     const alice = new Wallet(KEY_A);
-    const claim = buildMultiPartyClaim({ content: "x", contentType: "text/plain", createdAt: 1 });
+    const claim = buildMultiPartyClaim({
+      content: "x",
+      contentType: "text/plain",
+      createdAt: 1,
+      attesters: [ALICE_ADDR, BOB_ADDR],
+    });
     await expect(signMultiPartyClaim(alice, claim, networkWithoutMulti)).rejects.toThrow(
       /multiResolver/,
     );

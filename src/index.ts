@@ -46,6 +46,7 @@ export {
   hashToField,
   actionForContent,
   externalNullifierFor,
+  signalStringFor,
   signalHashFor,
   normalizeWorldIdProof,
 } from "./pop.js";

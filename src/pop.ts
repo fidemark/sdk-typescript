@@ -4,19 +4,20 @@
  * Mirrors World ID's hash-to-field conventions so frontends and on-chain
  * resolvers compute identical signal / externalNullifier values.
  *
- * Domain:
- *   - signal     = abi.encodePacked(contentHash, attester) -> hashToField
- *   - action     = "fidemark.attest.v1:" + contentHash (lowercase hex with 0x)
- *   - extNul     = abi.encodePacked(appId, action) -> hashToField
+ * Domain (matches `FidemarkPoPResolver`):
+ *   - action     = `f1{first28HexCharsOfContentHash}` (30 chars)
+ *   - signal     = lowercase string `"0x<contentHash_hex>:0x<attester_hex>"`
+ *                  (109 chars) -> hashToField
+ *   - extNul     = hashToField(hashToField(appId) || action)
+ *                  (two-pass per Worldcoin's official template)
  *   - hashToField(x) = uint256(keccak256(x)) >> 8
  *
- * Frontends pass `action` (and the `signal` content + attester) to IDKit;
- * IDKit's verifier produces a proof tied to those values. The on-chain
- * `FidemarkPoPResolver` recomputes the same digests from the encoded
- * attestation data and calls `IWorldID.verifyProof` against them.
+ * Single-pass `hashToField(appId || action)` does NOT match what IDKit's
+ * WASM bakes into the proof, the legacy formula was wrong and shipped with
+ * an early build of the resolver; the canonical formula is the one above.
  */
 
-import { keccak256, solidityPacked, type BytesLike } from "ethers";
+import { keccak256, solidityPacked, toUtf8Bytes, type BytesLike } from "ethers";
 
 export interface WorldIdProof {
   /** Merkle root of the World ID identity tree at proof time. */
@@ -57,12 +58,26 @@ export function actionForContent(contentHash: string): string {
 /** Compute the externalNullifier matching `FidemarkPoPResolver.externalNullifierFor`. */
 export function externalNullifierFor(appId: string, contentHash: string): bigint {
   const action = actionForContent(contentHash);
-  return hashToField(solidityPacked(["string", "string"], [appId, action]));
+  const appIdHash = hashToField(toUtf8Bytes(appId));
+  // abi.encodePacked(uint256, string) = 32-byte uint256 || UTF-8 bytes of action.
+  return hashToField(solidityPacked(["uint256", "string"], [appIdHash, action]));
+}
+
+/**
+ * Canonical signal STRING the dapp must pass to IDKit's `orbLegacy({ signal })`.
+ * Returns the lowercase `"0x<contentHash_hex>:0x<attester_hex>"` (109 chars).
+ */
+export function signalStringFor(contentHash: string, attester: string): string {
+  const ch = contentHash.toLowerCase();
+  const att = attester.toLowerCase();
+  const chPrefixed = ch.startsWith("0x") ? ch : `0x${ch}`;
+  const attPrefixed = att.startsWith("0x") ? att : `0x${att}`;
+  return `${chPrefixed}:${attPrefixed}`;
 }
 
 /** Compute the signalHash matching `FidemarkPoPResolver.signalHashFor`. */
 export function signalHashFor(contentHash: string, attester: string): bigint {
-  return hashToField(solidityPacked(["bytes32", "address"], [contentHash, attester]));
+  return hashToField(toUtf8Bytes(signalStringFor(contentHash, attester)));
 }
 
 /** Normalize a World ID proof into the array-of-bigints shape the SDK consumes. */

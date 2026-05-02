@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { keccak256, solidityPacked } from "ethers";
+import { keccak256, solidityPacked, toUtf8Bytes } from "ethers";
 import {
   actionForContent,
   externalNullifierFor,
   hashToField,
   normalizeWorldIdProof,
   signalHashFor,
+  signalStringFor,
 } from "../../src/index.js";
 
 describe("hashToField", () => {
@@ -45,12 +46,13 @@ describe("actionForContent", () => {
 });
 
 describe("externalNullifierFor", () => {
-  it("matches manual hashToField(packed(appId, action))", () => {
+  it("matches manual two-pass hashToField(hashToField(appId) || action)", () => {
     const appId = "app_test";
     const ch = "0x" + "11".repeat(32);
-    const expected = BigInt(
-      keccak256(solidityPacked(["string", "string"], [appId, actionForContent(ch)])),
-    ) >> 8n;
+    const action = actionForContent(ch);
+    const appIdHash = BigInt(keccak256(toUtf8Bytes(appId))) >> 8n;
+    const expected =
+      BigInt(keccak256(solidityPacked(["uint256", "string"], [appIdHash, action]))) >> 8n;
     expect(externalNullifierFor(appId, ch)).toBe(expected);
   });
 
@@ -66,12 +68,22 @@ describe("externalNullifierFor", () => {
   });
 });
 
+describe("signalStringFor", () => {
+  it("emits the canonical lowercase `0x<ch>:0x<addr>` (135 chars)", () => {
+    const ch = "0x" + "33".repeat(32);
+    const attester = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+    const s = signalStringFor(ch, attester);
+    expect(s).toBe(`${ch.toLowerCase()}:${attester.toLowerCase()}`);
+    expect(s.length).toBe(109);
+  });
+});
+
 describe("signalHashFor", () => {
-  it("matches manual hashToField(packed(contentHash, attester))", () => {
+  it("matches manual hashToField(utf8(`0x<ch>:0x<addr>`))", () => {
     const ch = "0x" + "33".repeat(32);
     const attester = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
     const expected =
-      BigInt(keccak256(solidityPacked(["bytes32", "address"], [ch, attester]))) >> 8n;
+      BigInt(keccak256(toUtf8Bytes(`${ch.toLowerCase()}:${attester.toLowerCase()}`))) >> 8n;
     expect(signalHashFor(ch, attester)).toBe(expected);
   });
 

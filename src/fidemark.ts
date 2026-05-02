@@ -445,18 +445,27 @@ export class Fidemark {
     // Public Base / Base Sepolia RPCs cap a single eth_getLogs request to 10K
     // blocks. Resolve "latest" to a concrete head and chunk so the scan keeps
     // working past the cap. 9500 leaves headroom under the 10K limit.
-    const provider = (resolver.runner as Provider | null) ?? null;
+    const provider = resolveProvider(runner);
     let toBlock: number;
     if (options.toBlock !== undefined && options.toBlock !== "latest") {
       toBlock = options.toBlock;
     } else {
-      if (!provider || typeof (provider as Provider).getBlockNumber !== "function") {
+      if (!provider) {
         throw new FidemarkError(
           "INVALID_INPUT",
           "verifyByHash requires a provider that exposes getBlockNumber.",
         );
       }
-      toBlock = await (provider as Provider).getBlockNumber();
+      // Bypass ethers' getBlockNumber cache: stale values can omit the
+      // just-mined block, hiding logs emitted by an attest call that returned
+      // a moment ago.
+      const sender = provider as unknown as { send?: (m: string, p: unknown[]) => Promise<unknown> };
+      if (typeof sender.send === "function") {
+        const hex = (await sender.send("eth_blockNumber", [])) as string;
+        toBlock = parseInt(hex, 16);
+      } else {
+        toBlock = await provider.getBlockNumber();
+      }
     }
     const MAX_LOG_RANGE = 9_500;
 
@@ -986,6 +995,18 @@ export class Fidemark {
       },
     };
   }
+}
+
+function resolveProvider(runner: unknown): Provider | null {
+  if (!runner) return null;
+  // Provider exposes getBlockNumber directly. A Signer (or NonceManager
+  // wrapper) carries its provider on `.provider`.
+  const r = runner as { getBlockNumber?: unknown; provider?: unknown };
+  if (typeof r.getBlockNumber === "function") return runner as Provider;
+  if (r.provider && typeof (r.provider as Provider).getBlockNumber === "function") {
+    return r.provider as Provider;
+  }
+  return null;
 }
 
 function normalizeBytes32(value: string): string {

@@ -18,6 +18,13 @@
  * the scenes.
  */
 
+// Top-level import is safe even though local.ts imports `registerNetwork`
+// from here: ESM handles the cycle as long as no symbol is accessed during
+// module evaluation. `loadDeploymentArtifact` is only called inside
+// `getNetwork`, after both modules have finished initializing.
+// eslint-disable-next-line import/no-cycle
+import { loadDeploymentArtifact } from "./local.js";
+
 export interface NetworkConfig {
   name: string;
   chainId: number;
@@ -94,11 +101,7 @@ export function getNetwork(name: NetworkName): NetworkConfig {
     // loadDeploymentArtifact() explicitly: getNetwork("base-sepolia") just
     // works as long as the package was published with the artifact in place.
     try {
-      // Local import avoids a top-level circular dependency between
-      // local.ts and networks.ts.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const local = require("./local.js") as typeof import("./local.js");
-      return local.loadDeploymentArtifact(name);
+      return loadDeploymentArtifact(name);
     } catch (err) {
       throw new Error(
         `Network ${name} is not yet deployed in this build of the SDK. ` +

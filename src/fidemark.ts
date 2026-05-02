@@ -25,7 +25,11 @@ import {
   type OffchainSignOptions,
 } from "./offchain.js";
 import { resolveVerifiedENS, type VerifiedENS } from "./ens.js";
-import { RESOLVER_EVENTS_ABI } from "./resolver-abi.js";
+import {
+  RESOLVER_EVENTS_ABI,
+  MULTI_RESOLVER_EVENTS_ABI,
+  POP_RESOLVER_EVENTS_ABI,
+} from "./resolver-abi.js";
 import { indexerVerifyByHash, defaultClient, type GraphqlClient, type IndexerMode } from "./indexer.js";
 import {
   buildMultiPartyClaim,
@@ -438,26 +442,59 @@ export class Fidemark {
     const runner = (this.eas as any).contract?.runner ?? this.signer;
     const resolver = new Contract(this.network.contracts.resolver, RESOLVER_EVENTS_ABI, runner);
     const fromBlock = options.fromBlock ?? this.network.deployBlock ?? 0;
-    const toBlock = options.toBlock ?? "latest";
+    // Public Base / Base Sepolia RPCs cap a single eth_getLogs request to 10K
+    // blocks. Resolve "latest" to a concrete head and chunk so the scan keeps
+    // working past the cap. 9500 leaves headroom under the 10K limit.
+    const provider = (resolver.runner as Provider | null) ?? null;
+    let toBlock: number;
+    if (options.toBlock !== undefined && options.toBlock !== "latest") {
+      toBlock = options.toBlock;
+    } else {
+      if (!provider || typeof (provider as Provider).getBlockNumber !== "function") {
+        throw new FidemarkError(
+          "INVALID_INPUT",
+          "verifyByHash requires a provider that exposes getBlockNumber.",
+        );
+      }
+      toBlock = await (provider as Provider).getBlockNumber();
+    }
+    const MAX_LOG_RANGE = 9_500;
 
     const uids = new Set<string>();
+    const scan = async (contract: Contract, filter: unknown) => {
+      for (let start = fromBlock; start <= toBlock; start += MAX_LOG_RANGE) {
+        const end = Math.min(start + MAX_LOG_RANGE - 1, toBlock);
+        const logs = (await contract.queryFilter(filter as any, start, end)) as any[];
+        for (const l of logs) uids.add(l.args.uid);
+      }
+    };
 
     const queries: Promise<unknown>[] = [];
-    if (options.type !== "ai") {
+    if (!options.type || options.type === "human") {
       const filter = (resolver.filters.HumanAttestation as any)(null, null, contentHash);
-      queries.push(
-        resolver
-          .queryFilter(filter, fromBlock, toBlock)
-          .then((logs: any[]) => logs.forEach((l) => uids.add(l.args.uid))),
-      );
+      queries.push(scan(resolver, filter));
     }
-    if (options.type !== "human") {
+    if (!options.type || options.type === "ai") {
       const filter = (resolver.filters.AIAttestation as any)(null, null, contentHash);
-      queries.push(
-        resolver
-          .queryFilter(filter, fromBlock, toBlock)
-          .then((logs: any[]) => logs.forEach((l) => uids.add(l.args.uid))),
+      queries.push(scan(resolver, filter));
+    }
+    if ((!options.type || options.type === "multi") && this.network.contracts.multiResolver) {
+      const multi = new Contract(
+        this.network.contracts.multiResolver,
+        MULTI_RESOLVER_EVENTS_ABI,
+        runner,
       );
+      const filter = (multi.filters.MultiAttestation as any)(null, contentHash);
+      queries.push(scan(multi, filter));
+    }
+    if ((!options.type || options.type === "pop") && this.network.contracts.popResolver) {
+      const pop = new Contract(
+        this.network.contracts.popResolver,
+        POP_RESOLVER_EVENTS_ABI,
+        runner,
+      );
+      const filter = (pop.filters.PoPAttestation as any)(null, null, contentHash);
+      queries.push(scan(pop, filter));
     }
     await Promise.all(queries);
 

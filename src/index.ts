@@ -14,6 +14,7 @@ export type {
   InspectResult,
 } from "./fidemark.js";
 export { hashContent, hashPrompt } from "./hashing.js";
+export { canonicalizeDom, hashRegion, FIDEMARK_DOM_VERSION } from "./dom.js";
 export { getNetwork, registerNetwork } from "./networks.js";
 export type { NetworkConfig, NetworkName } from "./networks.js";
 export { loadLocalNetwork, loadDeploymentArtifact } from "./local.js";

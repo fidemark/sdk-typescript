@@ -442,9 +442,13 @@ export class Fidemark {
     const runner = (this.eas as any).contract?.runner ?? this.signer;
     const resolver = new Contract(this.network.contracts.resolver, RESOLVER_EVENTS_ABI, runner);
     const fromBlock = options.fromBlock ?? this.network.deployBlock ?? 0;
-    // Public Base / Base Sepolia RPCs cap a single eth_getLogs request to 10K
-    // blocks. Resolve "latest" to a concrete head and chunk so the scan keeps
-    // working past the cap. 9500 leaves headroom under the 10K limit.
+    // Public Base / Base Sepolia RPCs cap a single eth_getLogs request to
+    // 2,000 blocks (down from 10K historically). Resolve "latest" to a
+    // concrete head and chunk so the scan keeps working past the cap.
+    // 1,900 leaves headroom for providers that count the range
+    // inclusively. Operators on a higher-tier RPC can override via the
+    // `chunkSize` option once we expose one; for now this is the safe
+    // default for the public endpoints.
     const provider = resolveProvider(runner);
     let toBlock: number;
     if (options.toBlock !== undefined && options.toBlock !== "latest") {
@@ -467,7 +471,7 @@ export class Fidemark {
         toBlock = await provider.getBlockNumber();
       }
     }
-    const MAX_LOG_RANGE = 9_500;
+    const MAX_LOG_RANGE = 1_900;
 
     const uids = new Set<string>();
     const scan = async (contract: Contract, filter: unknown) => {
